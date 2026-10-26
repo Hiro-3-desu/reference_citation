@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RefCite</title>
+<link rel="stylesheet" href="taskpane.css">
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<script defer src="taskpane.js"></script>
+</head>
+<body>
+<header class="top">
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="library" aria-selected="true">文献</button>
+    <button role="tab" data-tab="add">追加</button>
+    <button role="tab" data-tab="format">文献リスト</button>
+    <button role="tab" data-tab="manage">管理</button>
+  </nav>
+</header>
+
+<div id="notWord" class="banner" hidden>Word の中で開くと、引用の挿入と文献リストの作成ができます。</div>
+
+<!-- 文献 -->
+<section id="tab-library" class="tab">
+  <div class="search">
+    <input id="libSearch" type="search" placeholder="著者・タイトル・雑誌・年で絞り込み" autocomplete="off">
+  </div>
+  <div class="listhead">
+    <span id="libCount" class="muted"></span>
+    <label class="inline"><input id="onlyCited" type="checkbox"> この文書で引用中のみ</label>
+  </div>
+  <ul id="libList" class="refs"></ul>
+  <div id="libEmpty" class="empty" hidden>
+    <p><strong>ライブラリは空です。</strong></p>
+    <p>「追加」タブから、PubMed で検索するか、PMID・DOI を入力するか、EndNote などから書き出したファイルを読み込んでください。</p>
+  </div>
+  <footer class="actionbar">
+    <span id="selCount" class="muted">0 件選択</span>
+    <button id="btnDelete" class="ghost" disabled>削除</button>
+    <button id="btnCite" class="primary" disabled>引用を挿入</button>
+  </footer>
+  <div id="deleteConfirm" class="confirm" hidden>
+    <p>選択した文献をライブラリから削除します。すでに文書に挿入した引用は消えません。</p>
+    <div class="row end"><button id="btnDeleteNo" class="ghost">やめる</button><button id="btnDeleteYes" class="danger">削除する</button></div>
+  </div>
+</section>
+
+<!-- 追加 -->
+<section id="tab-add" class="tab" hidden>
+  <h2>PubMed で検索</h2>
+  <form id="pmForm" class="row">
+    <input id="pmTerm" type="search" placeholder="例: STEMI interhospital transfer" autocomplete="off">
+    <button class="primary" type="submit">検索</button>
+  </form>
+  <p id="pmStatus" class="muted small"></p>
+  <ul id="pmList" class="refs compact"></ul>
+  <div id="pmActions" class="row end" hidden>
+    <button id="pmAdd" class="primary">選択した文献を追加</button>
+  </div>
+
+  <h2>PMID・DOI で追加</h2>
+  <textarea id="idInput" rows="3" placeholder="例: 33087347&#10;10.1136/bmj.m3339&#10;（複数あるときは改行かスペースで区切る）"></textarea>
+  <div class="row end"><button id="idAdd" class="primary">追加</button></div>
+  <p id="idStatus" class="muted small"></p>
+
+  <h2>ファイルから読み込む</h2>
+  <p class="small">RIS（.ris / .txt）、BibTeX（.bib）、CSL-JSON に対応しています。</p>
+  <details class="small">
+    <summary>EndNote から書き出す方法</summary>
+    <ol>
+      <li>EndNote で書き出したい文献を選ぶ（全部なら Ctrl+A）</li>
+      <li>「File」→「Export」</li>
+      <li>「Output style」で <strong>RefMan (RIS) Export</strong> を選び、保存</li>
+      <li>保存した .txt ファイルをここで読み込む</li>
+    </ol>
+  </details>
+  <label class="file">
+    <input id="fileInput" type="file" accept=".ris,.txt,.bib,.json,.nbib">
+    <span>ファイルを選ぶ</span>
+  </label>
+  <p id="fileStatus" class="muted small"></p>
+</section>
+
+<!-- 文献リスト -->
+<section id="tab-format" class="tab" hidden>
+  <h2>文献のスタイル</h2>
+  <label class="field">投稿先
+    <select id="styleSelect"></select>
+  </label>
+  <label class="field">本文の引用番号
+    <select id="markerSelect"></select>
+  </label>
+  <p class="muted small">変更すると、この文書の番号と文献リストがすぐに書き換わります。</p>
+
+  <h2>文献リスト</h2>
+  <p class="small">文献リストを入れたい場所（本文の最後など）にカーソルを置いて押してください。</p>
+  <div class="stack">
+    <button id="btnBib" class="primary">文献リストを挿入</button>
+    <button id="btnRefresh">番号と文献リストを更新</button>
+  </div>
+  <p id="fmtStatus" class="status small" role="status"></p>
+
+  <h2>引用の編集</h2>
+  <p class="small">本文の引用番号の中にカーソルを置いてから押してください。</p>
+  <button id="btnEditCite">カーソル位置の引用を編集</button>
+  <div id="citeEditor" class="editor" hidden>
+    <ul id="citeRefs" class="refs compact"></ul>
+    <p class="muted small">文献を足すときは、カーソルを引用番号の中に置いたまま「文献」タブで「引用を挿入」を押します。</p>
+  </div>
+</section>
+
+<!-- 管理 -->
+<section id="tab-manage" class="tab" hidden>
+  <h2>この文書の文献</h2>
+  <p class="small">ほかのパソコンで作った文書を開いたときなどに、文書に入っている文献をこのパソコンのライブラリに取り込めます。</p>
+  <button id="btnImportDoc">文書の文献をライブラリに取り込む</button>
+  <p id="docStatus" class="muted small"></p>
+
+  <h2>バックアップ</h2>
+  <p class="small">ライブラリはこのパソコンの Word の中に保存されています。ときどき書き出して保存しておくと安心です。</p>
+  <div class="stack">
+    <button id="btnExportJson">ライブラリを書き出す（JSON）</button>
+    <button id="btnExportRis">ライブラリを書き出す（RIS、EndNote 用）</button>
+  </div>
+  <p class="small">書き出したファイルは「追加」タブの「ファイルから読み込む」で戻せます。</p>
+  <textarea id="exportBox" rows="6" readonly hidden></textarea>
+
+  <h2>投稿用に変換</h2>
+  <p class="small">引用番号と文献リストを、ふつうの文字に変換します。投稿直前に、<strong>別名で保存した文書</strong>で行ってください。変換した後は、番号の自動更新ができなくなります。</p>
+  <button id="btnPlain" class="danger-outline">ふつうの文字に変換する</button>
+  <div id="plainConfirm" class="confirm" hidden>
+    <p>この文書の引用と文献リストを、すべてふつうの文字に変換します。元に戻すには Word の「元に戻す」を使ってください。</p>
+    <div class="row end"><button id="btnPlainNo" class="ghost">やめる</button><button id="btnPlainYes" class="danger">変換する</button></div>
+  </div>
+  <p id="plainStatus" class="muted small"></p>
+</section>
+
+<div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

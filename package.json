@@ -1,0 +1,21 @@
+{
+  "name": "refcite",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test test/core.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@citation-js/core": "^0.7.21",
+    "@citation-js/plugin-bibtex": "^0.7.21",
+    "@citation-js/plugin-csl": "^0.7.22",
+    "@citation-js/plugin-ris": "^0.7.21",
+    "esbuild": "^0.24.2"
+  },
+  "type": "module",
+  "private": true
+}
