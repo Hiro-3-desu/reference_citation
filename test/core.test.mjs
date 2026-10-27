@@ -37,7 +37,7 @@ test('PubMed の要約を CSL に変換する', () => {
 
 test('どのスタイルでも文献リストを作れる', () => {
   const items = c.parseImportText(readFileSync(new URL('./sample.ris', import.meta.url), 'utf8'))
-  for (const s of c.STYLE_LIST) {
+  for (const s of c.styleList()) {
     const bib = c.formatBibliography(items, s.id)
     assert.equal(bib.length, 3, s.id)
     assert.match(c.runsToText(bib[0]), /Keeley/, s.id)
