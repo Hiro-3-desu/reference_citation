@@ -42,7 +42,9 @@ await build({
   format: 'iife',
   target: 'es2020',
   outfile: 'dist/taskpane.js',
-  legalComments: 'none'
+  legalComments: 'none',
+  // 画面の「管理」タブに出す版の表示
+  define: { __VERSION__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC' + (process.env.GITHUB_SHA ? ' / ' + process.env.GITHUB_SHA.slice(0, 7) : '')) }
 })
 cpSync('src/taskpane.html', 'dist/taskpane.html')
 cpSync('src/taskpane.css', 'dist/taskpane.css')

@@ -703,6 +703,9 @@ $('btnPlainYes').addEventListener('click', async () => {
 
 // ---------- 起動 ----------
 
+/* global __VERSION__ */
+$('version').textContent = typeof __VERSION__ !== 'undefined' ? __VERSION__ : '開発版'
+
 async function start () {
   for (const [lang, xml] of Object.entries(savedLocales())) registerLocale(lang, xml)
   for (const st of Object.values(savedStyles())) registerStyle(st)
