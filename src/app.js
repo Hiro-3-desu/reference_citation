@@ -1,7 +1,8 @@
 /* global Office */
 import { Cite } from '@citation-js/core'
-import { STYLE_LIST, MARKERS, refKey, shortAuthor, year, journal, parseImportText, parseAiText } from './core.js'
-import { pubmedSearch, resolveAiItems, loadLibrary, saveLibrary, addToLibrary } from './sources.js'
+import { styleList, getStyle, registerStyle, unregisterStyle, analyzeCsl, hasLocale, registerLocale, MARKERS, refKey, shortAuthor, year, journal, parseImportText, parseAiText } from './core.js'
+import { pubmedSearch, resolveAiItems, loadLibrary, saveLibrary, addToLibrary,
+  loadStyleIndex, searchStyles, fetchStyleXml, fetchLocaleXml, savedStyles, saveStyles, savedLocales, saveLocales } from './sources.js'
 import * as word from './word.js'
 
 const $ = id => document.getElementById(id)
@@ -409,11 +410,20 @@ $('fileInput').addEventListener('change', async e => {
 
 function renderFormat () {
   const ss = $('styleSelect')
-  ss.replaceChildren(...STYLE_LIST.map(s => new Option(s.title, s.id)))
-  ss.value = app.doc.style
+  const list = styleList()
+  const group = (label, items) => {
+    const g = document.createElement('optgroup')
+    g.label = label
+    g.append(...items.map(s => new Option(s.title, s.id)))
+    return g
+  }
+  const custom = list.filter(s => s.custom)
+  ss.replaceChildren(group('よく使う形式', list.filter(s => !s.custom)), ...(custom.length ? [group('追加した形式', custom)] : []))
+  ss.value = getStyle(app.doc.style) ? app.doc.style : 'bmj'
   const ms = $('markerSelect')
   ms.replaceChildren(...Object.entries(MARKERS).map(([k, m]) => new Option(m.label, k)))
   ms.value = app.doc.marker
+  renderCustomStyles()
 }
 
 async function applyFormat (message) {
@@ -429,11 +439,148 @@ async function applyFormat (message) {
   }
 }
 
-$('styleSelect').addEventListener('change', () => {
-  app.doc.style = $('styleSelect').value
-  app.doc.marker = STYLE_LIST.find(s => s.id === app.doc.style)?.marker || app.doc.marker
-  $('markerSelect').value = app.doc.marker
-  applyFormat(res => `${$('styleSelect').selectedOptions[0].text} に変更しました（引用 ${res.citations} か所・文献 ${res.references} 件）。`)
+// 文書で使う形式を切り替える。追加した形式なら、ほかのパソコンでも開けるように文書にも保存する。
+function useStyle (id) {
+  const style = getStyle(id)
+  app.doc.style = id
+  app.doc.marker = style?.marker || app.doc.marker
+  if (style && !styleList().find(s => s.id === id)?.custom) delete app.doc.customStyle
+  else if (style) app.doc.customStyle = { id: style.id, title: style.title, xml: style.xml, locale: style.locale, marker: style.marker }
+  renderFormat()
+  applyFormat(res => `${style?.title || id} に変更しました（引用 ${res.citations} か所・文献 ${res.references} 件）。`)
+}
+
+$('styleSelect').addEventListener('change', () => useStyle($('styleSelect').value))
+
+// ---------- 形式の追加 ----------
+
+async function ensureLocale (lang) {
+  if (!lang || hasLocale(lang)) return
+  try {
+    const xml = await fetchLocaleXml(lang)
+    registerLocale(lang, xml)
+    const all = savedLocales()
+    all[lang] = xml
+    saveLocales(all)
+  } catch { /* 言語ファイルがなければ英語（米国）で整形される */ }
+}
+
+// 形式を登録し、このパソコンに保存する
+async function addStyle (style) {
+  await ensureLocale(style.locale)
+  registerStyle(style)
+  const all = savedStyles()
+  all[style.id] = style
+  if (!saveStyles(all)) toast('形式をこのパソコンに保存できませんでした。この文書でだけ使えます。', true)
+}
+
+function renderCustomStyles () {
+  const list = $('customStyles')
+  list.replaceChildren()
+  const saved = Object.values(savedStyles())
+  for (const st of saved) {
+    const li = document.createElement('li')
+    li.className = 'srow'
+    const name = document.createElement('div')
+    name.className = 'name'
+    name.textContent = st.title
+    const del = document.createElement('button')
+    del.className = 'ghost'
+    del.textContent = '削除'
+    del.addEventListener('click', () => {
+      const all = savedStyles()
+      delete all[st.id]
+      saveStyles(all)
+      // 開いている文書で使っている形式は、文書に保存した分で使い続けられる
+      if (app.doc.style !== st.id) unregisterStyle(st.id)
+      renderFormat()
+      toast(`「${st.title}」を一覧から削除しました`)
+    })
+    li.append(name, del)
+    list.append(li)
+  }
+  $('customBox').hidden = saved.length === 0
+}
+
+function renderStyleResults (hits) {
+  const list = $('styleResults')
+  list.replaceChildren()
+  for (const h of hits) {
+    const li = document.createElement('li')
+    li.className = 'srow'
+    const name = document.createElement('div')
+    name.className = 'name'
+    name.textContent = h.t
+    if (h.p) {
+      const sub = document.createElement('small')
+      sub.textContent = `元の形式: ${h.p}`
+      name.append(sub)
+    }
+    const btn = document.createElement('button')
+    const have = !!getStyle(h.id)
+    btn.textContent = have ? '使う' : '追加'
+    btn.className = have ? '' : 'primary'
+    btn.addEventListener('click', async () => {
+      btn.disabled = true
+      try {
+        if (!have) {
+          const index = await loadStyleIndex()
+          const xml = await fetchStyleXml(h, index.commit)
+          const a = analyzeCsl(xml)
+          if (!a.ok) throw new Error(a.reason)
+          await addStyle({ id: h.id, title: h.t, xml, locale: a.locale, marker: a.marker })
+        }
+        useStyle(h.id)
+        renderStyleResults(hits)
+        toast(`「${h.t}」を追加して、この文書の形式にしました`)
+      } catch (e) {
+        btn.disabled = false
+        toast('追加できませんでした: ' + errorMessage(e), true)
+      }
+    })
+    li.append(name, btn)
+    list.append(li)
+  }
+}
+
+$('styleForm').addEventListener('submit', async e => {
+  e.preventDefault()
+  const q = $('styleTerm').value.trim()
+  if (!q) return
+  $('styleStatus').textContent = '探しています…'
+  try {
+    const hits = searchStyles(await loadStyleIndex(), q)
+    $('styleStatus').textContent = hits.length
+      ? `${hits.length} 件見つかりました${hits.length >= 30 ? '（上位 30 件）' : ''}。`
+      : '見つかりませんでした。別の書き方（略さない雑誌名など）で試すか、下の「CSL ファイルから読み込む」を使ってください。'
+    renderStyleResults(hits)
+  } catch (err) {
+    $('styleStatus').textContent = errorMessage(err)
+  }
+})
+
+$('styleFile').addEventListener('change', async e => {
+  const file = e.target.files[0]
+  e.target.value = ''
+  if (!file) return
+  try {
+    let xml = await file.text()
+    let a = analyzeCsl(xml)
+    if (a.ok && a.dependent) {
+      // 雑誌ごとの形式ファイルは、元になる形式を取りに行く
+      xml = await fetchStyleXml({ id: a.id, p: a.parent })
+      const title = a.title
+      a = analyzeCsl(xml)
+      a.title = title
+    }
+    if (!a.ok) throw new Error(a.reason)
+    const id = 'file-' + a.id
+    await addStyle({ id, title: a.title, xml, locale: a.locale, marker: a.marker })
+    useStyle(id)
+    toast(`「${a.title}」を追加して、この文書の形式にしました`)
+  } catch (err) {
+    toast(`${file.name} を読み込めませんでした: ${errorMessage(err)}`, true)
+  }
 })
 
 $('markerSelect').addEventListener('change', () => {
@@ -557,7 +704,15 @@ $('btnPlainYes').addEventListener('click', async () => {
 // ---------- 起動 ----------
 
 async function start () {
+  for (const [lang, xml] of Object.entries(savedLocales())) registerLocale(lang, xml)
+  for (const st of Object.values(savedStyles())) registerStyle(st)
   app.doc = word.loadDocState()
+  // ほかのパソコンで追加した形式を使っている文書なら、文書に保存された形式を使う
+  const cs = app.doc.customStyle
+  if (cs && cs.id === app.doc.style && !getStyle(cs.id)) {
+    registerStyle(cs)
+    ensureLocale(cs.locale)
+  }
   renderFormat()
   renderLibrary()
   if (!word.inWord()) {

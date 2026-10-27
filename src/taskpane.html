@@ -103,6 +103,27 @@
   </label>
   <p class="muted small">変更すると、この文書の番号と文献リストがすぐに書き換わります。</p>
 
+  <h2>形式を追加</h2>
+  <p class="small">一覧にない雑誌の形式は、雑誌名で検索して追加できます（番号で引用する約 5,500 誌）。</p>
+  <form id="styleForm" class="row">
+    <input id="styleTerm" type="search" placeholder="雑誌名（例: Europace, Heart Rhythm）" autocomplete="off">
+    <button class="primary" type="submit">検索</button>
+  </form>
+  <p id="styleStatus" class="muted small"></p>
+  <ul id="styleResults" class="refs compact"></ul>
+  <details class="small">
+    <summary>CSL ファイルから読み込む</summary>
+    <p>検索で見つからないときは、<a href="https://www.zotero.org/styles" target="_blank" rel="noopener">Zotero Style Repository</a> で雑誌を探して「.csl」ファイルをダウンロードし、ここで読み込みます。自分で書き換えた CSL ファイルも使えます。</p>
+    <label class="file">
+      <input id="styleFile" type="file" accept=".csl,.xml">
+      <span>CSL ファイルを選ぶ</span>
+    </label>
+  </details>
+  <div id="customBox" hidden>
+    <h2>追加した形式</h2>
+    <ul id="customStyles" class="refs compact"></ul>
+  </div>
+
   <h2>文献リスト</h2>
   <p class="small">文献リストを入れたい場所（本文の最後など）にカーソルを置いて押してください。</p>
   <div class="stack">

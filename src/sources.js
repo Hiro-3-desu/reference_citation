@@ -178,3 +178,71 @@ export function addToLibrary (library, items) {
   }
   return added
 }
+
+// ---------- 引用の形式（CSL スタイル）の追加 ----------
+
+const CSL_RAW = 'https://raw.githubusercontent.com/citation-style-language'
+let styleIndex = null
+
+// ビルド時に作った一覧（番号式の形式だけ、約 5,500 件）を読み込む
+export async function loadStyleIndex () {
+  if (!styleIndex) {
+    const res = await fetch('styles-index.json')
+    if (!res.ok) throw new Error('形式の一覧を読み込めませんでした。')
+    styleIndex = await res.json()
+  }
+  return styleIndex
+}
+
+export function searchStyles (index, query, limit = 30) {
+  const q = query.toLowerCase().normalize('NFKC').split(/\s+/).filter(Boolean)
+  if (!q.length) return []
+  const hits = []
+  for (const s of index.styles) {
+    const hay = `${s.t} ${s.s || ''} ${s.id}`.toLowerCase()
+    if (!q.every(w => hay.includes(w))) continue
+    // 雑誌名がそのまま一致するもの、前方一致するものを上に
+    const t = s.t.toLowerCase()
+    const full = q.join(' ')
+    const rank = t === full || (s.s || '').toLowerCase() === full ? 0 : t.startsWith(full) ? 1 : 2
+    hits.push({ ...s, rank })
+  }
+  return hits.sort((a, b) => a.rank - b.rank || a.t.length - b.t.length).slice(0, limit)
+}
+
+async function getText (url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`形式のファイルを取得できませんでした（${res.status}）`)
+  return res.text()
+}
+
+// 形式の CSL を取得する。雑誌ごとの形式（dependent）は、元になる形式の中身を使う。
+export async function fetchStyleXml (entry, commit = 'master') {
+  if (!entry.p) return getText(`${CSL_RAW}/styles/${commit}/${entry.id}.csl`)
+  return getText(`${CSL_RAW}/styles/${commit}/${entry.p}.csl`)
+}
+
+export async function fetchLocaleXml (lang) {
+  return getText(`${CSL_RAW}/locales/master/locales-${lang}.xml`)
+}
+
+const STYLES_KEY = 'refcite.styles.v1'
+const LOCALES_KEY = 'refcite.locales.v1'
+
+function loadJson (key) {
+  try { return JSON.parse(localStorage.getItem(key)) || {} } catch { return {} }
+}
+
+function saveJson (key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const savedStyles = () => loadJson(STYLES_KEY)
+export const saveStyles = styles => saveJson(STYLES_KEY, styles)
+export const savedLocales = () => loadJson(LOCALES_KEY)
+export const saveLocales = locales => saveJson(LOCALES_KEY, locales)

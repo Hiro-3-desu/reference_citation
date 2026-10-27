@@ -3,6 +3,7 @@
 //   BASE_URL=https://example.github.io/refcite node build.mjs
 import { readFileSync, writeFileSync, mkdirSync, cpSync, readdirSync } from 'node:fs'
 import { build } from 'esbuild'
+import { execFileSync } from 'node:child_process'
 
 // 文献スタイル（表示名・言語・既定の引用番号の形）
 const STYLE_META = [
@@ -46,5 +47,11 @@ await build({
 cpSync('src/taskpane.html', 'dist/taskpane.html')
 cpSync('src/taskpane.css', 'dist/taskpane.css')
 cpSync('assets', 'dist/assets', { recursive: true })
+// 形式の一覧（CSL_STYLES_DIR に citation-style-language/styles を置いたときだけ作る）
+if (process.env.CSL_STYLES_DIR) {
+  execFileSync(process.execPath, ['scripts/style-index.mjs', process.env.CSL_STYLES_DIR, 'dist/styles-index.json'], { stdio: 'inherit' })
+} else {
+  console.warn('CSL_STYLES_DIR がないので、形式の一覧（styles-index.json）は作りません')
+}
 writeFileSync('dist/manifest.xml', readFileSync('manifest.template.xml', 'utf8').replaceAll('{{BASE_URL}}', BASE_URL))
 console.log('built dist/ for', BASE_URL, readdirSync('dist'))

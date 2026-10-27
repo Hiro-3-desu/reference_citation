@@ -8,6 +8,7 @@ Word で使う文献管理アドインです。EndNote の「Cite While You Writ
 - **文献の追加**: PubMed 検索、RIS・BibTeX・CSL-JSON ファイルの読み込み（EndNote は RIS で書き出し）
 - **引用の挿入**: 文献を選んで「引用を挿入」。番号は文書中の初出順に自動で振られ、範囲はまとめて表示（例: 1–3,5）
 - **文献リスト**: BMJ、Vancouver（NLM / Elsevier）、AMA、NEJM、Lancet、AHA、JACC、ESC、Circulation Journal、Nature
+- **形式の追加**: 一覧にない雑誌は「文献リスト」タブで雑誌名を検索して追加（CSL スタイル集のうち番号式の約 5,500 誌）。Zotero Style Repository などの .csl ファイルも読み込める。追加した形式はそのパソコンに保存され、使った文書の中にも保存されるので、ほかのパソコンで文書を開いても同じ形式で更新できる。著者名と年で引用する形式や、文献リストを著者名順に並べる形式は、番号と合わないので受け付けない
 - **引用の編集**: 引用から文献を外す。カーソルを引用の中に置いて「引用を挿入」すると文献を追加
 - **投稿用の変換**: 引用と文献リストをふつうの文字に変換
 
@@ -35,10 +36,11 @@ Word で使う文献管理アドインです。EndNote の「Cite While You Writ
 
 ```sh
 npm install
-BASE_URL=https://<ユーザー名>.github.io/<リポジトリ名> npm run build   # dist/ に出力
+BASE_URL=https://<ユーザー名>.github.io/<リポジトリ名> CSL_STYLES_DIR=<citation-style-language/styles のフォルダ> npm run build   # dist/ に出力
 npm test                                                             # 番号付け・取り込み・整形のテスト
 node test/ui.e2e.mjs                                                 # Word の模擬環境で画面を通しで操作（Playwright が必要）
 node test/ai.e2e.mjs                                                 # 「AI の回答から追加」を PubMed の模擬応答で通しで操作
+CSL_STYLES_DIR=<styles のフォルダ> node test/styles.e2e.mjs          # 「形式を追加」を通しで操作
 ```
 
 `dist/` を HTTPS で公開し、`dist/manifest.xml` を Word に登録すると使えます。

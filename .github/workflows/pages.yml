@@ -22,6 +22,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/checkout@v4
+        with:
+          repository: citation-style-language/styles
+          path: csl-styles
       - run: npm ci
       - run: npm test
       - id: pages
@@ -29,6 +33,7 @@ jobs:
       - run: npm run build
         env:
           BASE_URL: ${{ steps.pages.outputs.base_url }}
+          CSL_STYLES_DIR: csl-styles
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

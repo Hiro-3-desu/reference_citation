@@ -82,3 +82,29 @@ test('タイトルの一致度', () => {
   assert.ok(c.titleSimilarity('A comparison of coronary angioplasty with fibrinolytic therapy', 'Andersen HR. A comparison of coronary angioplasty with fibrinolytic therapy. NEJM') > 0.9)
   assert.ok(c.titleSimilarity('Dapagliflozin in heart failure with reduced ejection fraction', 'Keeley EC. Primary angioplasty versus thrombolysis. Lancet') < 0.2)
 })
+
+const csl = (format, bib, cit = '<layout><text variable="citation-number"/></layout>') => `<?xml version="1.0"?>
+<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" version="1.0" default-locale="en-GB">
+  <info><title>Test Journal</title><id>http://www.zotero.org/styles/test-journal</id><category citation-format="${format}"/></info>
+  <citation>${cit}</citation>
+  <bibliography>${bib}<layout><text variable="title"/></layout></bibliography>
+</style>`
+
+test('追加する形式を調べる（番号式・引用順だけ受け付ける）', () => {
+  const ok = c.analyzeCsl(csl('numeric', '', '<layout vertical-align="sup"><text variable="citation-number"/></layout>'))
+  assert.deepEqual([ok.ok, ok.id, ok.locale, ok.marker], [true, 'test-journal', 'en-GB', 'superscript'])
+  assert.equal(c.analyzeCsl(csl('numeric', '', '<layout prefix="(" suffix=")"><text variable="citation-number"/></layout>')).marker, 'parens')
+  assert.equal(c.analyzeCsl(csl('author-date', '')).ok, false)
+  assert.equal(c.analyzeCsl(csl('numeric', '<sort><key macro="author"/></sort>')).ok, false)
+  assert.equal(c.analyzeCsl(csl('numeric', '<sort><key variable="citation-number"/></sort>')).ok, true)
+  assert.equal(c.analyzeCsl('<html></html>').ok, false)
+  const dep = c.analyzeCsl('<style xmlns="http://purl.org/net/xbiblio/csl"><info><title>Dep</title><id>http://www.zotero.org/styles/dep</id><link href="http://www.zotero.org/styles/bmj" rel="independent-parent"/></info></style>')
+  assert.deepEqual([dep.dependent, dep.parent], [true, 'bmj'])
+})
+
+test('追加した形式で文献リストを作れる', () => {
+  c.registerStyle({ id: 'test-journal', title: 'Test Journal', xml: csl('numeric', ''), locale: 'en-GB', marker: 'brackets' })
+  const items = c.parseImportText(readFileSync(new URL('./sample.ris', import.meta.url), 'utf8'))
+  assert.equal(c.runsToText(c.formatBibliography(items, 'test-journal')[0]), items[0].title)
+  assert.ok(c.styleList().some(s => s.id === 'test-journal' && s.custom))
+})

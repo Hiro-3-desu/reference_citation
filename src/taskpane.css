@@ -119,3 +119,9 @@ summary { cursor: pointer; }
 .chip.warn { background: var(--warn-soft); color: var(--warn); }
 .chip.bad { background: var(--bad-soft); color: var(--danger); }
 .chip.info { background: var(--accent-soft); color: var(--accent); }
+
+.srow { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.srow .name { flex: 1; min-width: 0; }
+.srow .name small { display: block; color: var(--muted); font-size: 11px; }
+.srow button { padding: 2px 10px; }
+a { color: var(--accent); }

@@ -11,7 +11,69 @@ const csl = plugins.config.get('@csl')
 for (const s of STYLES) csl.templates.add(s.id, s.xml)
 for (const [lang, xml] of Object.entries(LOCALES)) csl.locales.add(lang, xml)
 
-export const STYLE_LIST = STYLES.map(({ id, title, locale, marker }) => ({ id, title, locale, marker }))
+// あとから追加した形式（雑誌名で検索して追加したもの、CSL ファイルから読み込んだもの）
+const extraStyles = new Map()
+
+export function styleList () {
+  return [
+    ...STYLES.map(({ id, title, locale, marker }) => ({ id, title, locale, marker, custom: false })),
+    ...[...extraStyles.values()].filter(s => !STYLES.some(b => b.id === s.id))
+      .map(({ id, title, locale, marker }) => ({ id, title, locale, marker, custom: true }))
+  ]
+}
+
+export function getStyle (id) {
+  return STYLES.find(s => s.id === id) || extraStyles.get(id) || null
+}
+
+export function registerStyle (style) {
+  csl.templates.add(style.id, style.xml)
+  extraStyles.set(style.id, style)
+}
+
+export function unregisterStyle (id) {
+  extraStyles.delete(id)
+}
+
+export function hasLocale (lang) {
+  return csl.locales.has(lang)
+}
+
+export function registerLocale (lang, xml) {
+  csl.locales.add(lang, xml)
+}
+
+const attr = (xml, re) => re.exec(xml)?.[1]
+
+// CSL ファイルの中身を調べる。このアドインは番号で引用するので、番号式で、
+// 文献リストを引用順に並べる形式だけを受け付ける。
+export function analyzeCsl (xml) {
+  if (!/<style\b[^>]*xmlns="http:\/\/purl\.org\/net\/xbiblio\/csl"/.test(xml)) {
+    return { ok: false, reason: 'CSL の形式ファイルではありません。' }
+  }
+  const info = /<info>([\s\S]*?)<\/info>/.exec(xml)?.[1] || ''
+  const title = (attr(info, /<title>([\s\S]*?)<\/title>/) || '名前のない形式').replace(/&amp;/g, '&').trim()
+  const idUrl = attr(info, /<id>([\s\S]*?)<\/id>/) || ''
+  const id = (idUrl.split('/').filter(Boolean).pop() || title).toLowerCase().replace(/[^a-z0-9-]+/g, '-')
+  const parent = attr(info, /href="https?:\/\/www\.zotero\.org\/styles\/([^"]+)"\s+rel="independent-parent"/) ||
+    attr(info, /rel="independent-parent"\s+href="https?:\/\/www\.zotero\.org\/styles\/([^"]+)"/)
+  const locale = attr(xml, /<style\b[^>]*default-locale="([^"]+)"/) || 'en-US'
+  if (parent && !/<citation\b/.test(xml)) return { ok: true, dependent: true, parent, id, title, locale }
+
+  const format = attr(info, /citation-format="([^"]+)"/)
+  if (format && format !== 'numeric') {
+    return { ok: false, id, title, reason: `「${title}」は番号ではなく ${format === 'author-date' ? '著者名と年' : '脚注など'} で引用する形式なので、このアドインでは使えません。` }
+  }
+  const bib = /<bibliography\b[\s\S]*?<\/bibliography>/.exec(xml)?.[0]
+  if (!bib) return { ok: false, id, title, reason: `「${title}」には文献リストの書き方が含まれていません。` }
+  const sortKeys = [...(/<sort>([\s\S]*?)<\/sort>/.exec(bib)?.[1] || '').matchAll(/<key\b([^>]*)>/g)].map(m => m[1])
+  if (sortKeys.some(k => !/variable="citation-number"/.test(k))) {
+    return { ok: false, id, title, reason: `「${title}」は文献リストを著者名の順に並べる形式なので、引用順の番号と合わず、このアドインでは使えません。` }
+  }
+  const cit = /<citation\b[\s\S]*?<\/citation>/.exec(xml)?.[0] || ''
+  const marker = /vertical-align="sup"/.test(cit) ? 'superscript' : /prefix="\("/.test(cit) ? 'parens' : 'brackets'
+  return { ok: true, dependent: false, id, title, locale, marker }
+}
 
 export function newId (prefix = 'r') {
   return prefix + Math.random().toString(36).slice(2, 10)
@@ -196,7 +258,7 @@ export function citationLabel (nums, marker) {
 // 各要素は [{ text, italic, bold, superscript }] の配列（Word に書式付きで書き込むため）。
 export function formatBibliography (items, styleId) {
   if (!items.length) return []
-  const style = STYLES.find(s => s.id === styleId) || STYLES[0]
+  const style = getStyle(styleId) || STYLES[0]
   const entries = new Cite(items).format('bibliography', {
     format: 'html',
     template: style.id,
