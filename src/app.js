@@ -1,7 +1,7 @@
 /* global Office */
 import { Cite } from '@citation-js/core'
-import { styleList, getStyle, registerStyle, unregisterStyle, analyzeCsl, hasLocale, registerLocale, MARKERS, refKey, shortAuthor, year, journal, parseImportText, parseAiText } from './core.js'
-import { pubmedSearch, resolveAiItems, loadLibrary, saveLibrary, addToLibrary,
+import { styleList, getStyle, registerStyle, unregisterStyle, analyzeCsl, hasLocale, registerLocale, MARKERS, refKey, shortAuthor, year, journal, parseImportText, parseAiText, linksFor } from './core.js'
+import { pubmedSearch, resolveAiItems, findOpenAccess, loadLibrary, saveLibrary, addToLibrary,
   loadStyleIndex, searchStyles, fetchStyleXml, fetchLocaleXml, savedStyles, saveStyles, savedLocales, saveLocales } from './sources.js'
 import * as word from './word.js'
 
@@ -50,6 +50,73 @@ function requireWord () {
   return false
 }
 
+// ---------- 論文を開く ----------
+
+// いつも使っているブラウザで開く（Word の中では Office の API、それ以外はふつうのリンク）
+function openUrl (url) {
+  try {
+    if (typeof Office !== 'undefined' && Office.context?.ui?.openBrowserWindow) {
+      Office.context.ui.openBrowserWindow(url)
+      return
+    }
+  } catch { /* 下の方法で開く */ }
+  window.open(url, '_blank', 'noopener')
+}
+
+const oaCache = new Map() // refKey → 無料版の { url, pdf } または null
+
+// 「PubMed・出版社・全文（PMC）・PDF を探す」の並び
+function linkRow (r) {
+  const row = document.createElement('div')
+  row.className = 'links'
+  // クリックしても、文献の選択が切り替わらないようにする
+  row.addEventListener('click', e => e.stopPropagation())
+  for (const l of linksFor(r)) {
+    const a = document.createElement('a')
+    a.href = l.url
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.textContent = l.label
+    a.addEventListener('click', e => { e.preventDefault(); openUrl(l.url) })
+    row.append(a)
+  }
+  if (r.DOI || r.PMID) {
+    const btn = document.createElement('button')
+    btn.className = 'linkbtn'
+    const key = refKey(r)
+    const show = oa => {
+      btn.textContent = oa === undefined ? 'PDF を探す' : oa ? (oa.pdf ? '無料 PDF' : '無料で読む') : '無料版なし'
+      btn.disabled = oa === null
+      btn.title = oa === null ? '無料で読める版は見つかりませんでした。「出版社」から開き、所属機関のアカウントで読んでください。' : ''
+    }
+    show(oaCache.get(key))
+    btn.addEventListener('click', async e => {
+      e.preventDefault()
+      let oa = oaCache.get(key)
+      if (oa === undefined) {
+        btn.disabled = true
+        btn.textContent = '探しています…'
+        try {
+          oa = await findOpenAccess(r)
+          oaCache.set(key, oa)
+        } catch (err) {
+          show(undefined)
+          toast('PDF を探せませんでした: ' + errorMessage(err), true)
+          return
+        }
+        show(oa)
+        if (!oa) {
+          toast('無料で読める版は見つかりませんでした。「出版社」から開き、所属機関のアカウントで読んでください。')
+          return
+        }
+      }
+      openUrl(oa.url)
+    })
+    row.append(btn)
+  }
+  return row
+}
+
 // 文献 1 件分の <li> を作る（テキストはすべて textContent で入れる）
 function refItem (r, { checkbox = false, checked = false, badge = '', button = null } = {}) {
   const li = document.createElement('li')
@@ -80,7 +147,7 @@ function refItem (r, { checkbox = false, checked = false, badge = '', button = n
   const jr = document.createElement('div')
   jr.className = 'jr'
   jr.textContent = [journal(r), r.PMID ? `PMID ${r.PMID}` : ''].filter(Boolean).join(' · ')
-  li.append(meta, title, jr)
+  li.append(meta, title, jr, linkRow(r))
   if (button) li.append(button)
   return li
 }
@@ -253,7 +320,7 @@ function aiOption (r, { type, name, checked, onPick }) {
   const jr = document.createElement('div')
   jr.className = 'jr'
   jr.textContent = [journal(r), r.PMID ? `PMID ${r.PMID}` : (r.DOI ? `DOI ${r.DOI}` : '')].filter(Boolean).join(' · ')
-  label.append(input, meta, title, jr)
+  label.append(input, meta, title, jr, linkRow(r))
   return label
 }
 

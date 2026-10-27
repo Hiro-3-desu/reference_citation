@@ -9,6 +9,7 @@ Word で使う文献管理アドインです。EndNote の「Cite While You Writ
 - **引用の挿入**: 文献を選んで「引用を挿入」。番号は文書中の初出順に自動で振られ、範囲はまとめて表示（例: 1–3,5）
 - **文献リスト**: BMJ、Vancouver（NLM / Elsevier）、AMA、NEJM、Lancet、AHA、JACC、ESC、Circulation Journal、Nature
 - **形式の追加**: 一覧にない雑誌は「文献リスト」タブで雑誌名を検索して追加（CSL スタイル集のうち番号式の約 5,500 誌）。Zotero Style Repository などの .csl ファイルも読み込める。追加した形式はそのパソコンに保存され、使った文書の中にも保存されるので、ほかのパソコンで文書を開いても同じ形式で更新できる。著者名と年で引用する形式や、文献リストを著者名順に並べる形式は、番号と合わないので受け付けない
+- **論文を開く**: 各文献に PubMed・出版社（DOI）・全文（PMC）のリンク。「PDF を探す」で OpenAlex に DOI / PMID を問い合わせ、無料で読める版（オープンアクセス）があれば開く
 - **引用の編集**: 引用から文献を外す。カーソルを引用の中に置いて「引用を挿入」すると文献を追加
 - **リンクを外す（投稿前）**: 引用と文献リストの RefCite とのリンクを外し、ただの文字にする
 
@@ -17,7 +18,7 @@ Word で使う文献管理アドインです。EndNote の「Cite While You Writ
 - **ライブラリ**: そのパソコンの Word アドインの中（ブラウザの localStorage）。「管理」タブから JSON / RIS で書き出せます。
 - **文書で使った文献と引用**: Word 文書の中（document settings）。文書だけをほかのパソコンに渡しても、番号の更新や文献リストの再作成ができます。
 
-外部に送るのは、PubMed（NCBI E-utilities）と Crossref への検索語・PMID・DOI だけです。
+外部に送るのは、PubMed（NCBI E-utilities）・Crossref・OpenAlex への検索語・PMID・DOI だけです。
 
 ## 仕組み
 

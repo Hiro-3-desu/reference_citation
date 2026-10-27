@@ -489,3 +489,14 @@ export function parseAiText (text) {
   })
   return unique.slice(0, 100)
 }
+
+// ---------- 論文を開くリンク ----------
+
+export function linksFor (r) {
+  const links = []
+  if (r.PMID) links.push({ label: 'PubMed', url: `https://pubmed.ncbi.nlm.nih.gov/${r.PMID}/` })
+  if (r.DOI) links.push({ label: '出版社', url: `https://doi.org/${r.DOI}` })
+  else if (r.URL) links.push({ label: '論文のページ', url: r.URL })
+  if (r.PMCID) links.push({ label: '全文（PMC）', url: `https://pmc.ncbi.nlm.nih.gov/articles/${r.PMCID}/` })
+  return links
+}

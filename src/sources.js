@@ -246,3 +246,19 @@ export const savedStyles = () => loadJson(STYLES_KEY)
 export const saveStyles = styles => saveJson(STYLES_KEY, styles)
 export const savedLocales = () => loadJson(LOCALES_KEY)
 export const saveLocales = locales => saveJson(LOCALES_KEY, locales)
+
+// ---------- 無料で読める PDF ----------
+
+// OpenAlex で、オープンアクセス版（無料で読める版）の PDF やページを探す。送るのは DOI か PMID だけ。
+export async function findOpenAccess (r) {
+  const key = r.DOI ? `doi:${r.DOI}` : r.PMID ? `pmid:${r.PMID}` : null
+  if (!key) return null
+  const res = await fetch(`https://api.openalex.org/works/${encodeURIComponent(key)}?select=open_access,best_oa_location`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`通信エラー（${res.status}）`)
+  const w = await res.json()
+  const loc = w.best_oa_location || {}
+  if (loc.pdf_url) return { url: loc.pdf_url, pdf: true }
+  const url = loc.landing_page_url || w.open_access?.oa_url
+  return url && w.open_access?.is_oa ? { url, pdf: false } : null
+}
