@@ -157,6 +157,15 @@ export function crossrefToCsl (c) {
 // RIS / BibTeX / CSL-JSON のテキストを CSL-JSON の配列に変換
 export function parseImportText (text) {
   text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').trim()
+  // RefCite で書き出した JSON は、そのまま読む（自分の PDF のリンクも残す）
+  if (text.startsWith('[')) {
+    try {
+      const arr = JSON.parse(text)
+      if (Array.isArray(arr) && arr.every(o => o && typeof o === 'object' && (o.title || o.type))) {
+        return arr.map(({ _added, ...o }) => clean({ ...o, id: newId() }))
+      }
+    } catch { /* CSL-JSON として下で読む */ }
+  }
   let forceType
   if (/^TY {2}- /m.test(text)) forceType = '@ris/file'
   else if (/^@\w+\s*\{/m.test(text)) forceType = '@biblatex/text'

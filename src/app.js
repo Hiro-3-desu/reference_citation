@@ -65,12 +65,28 @@ function openUrl (url) {
 
 const oaCache = new Map() // refKey → 無料版の { url, pdf } または null
 
-// 「PubMed・出版社・全文（PMC）・PDF を探す」の並び
-function linkRow (r) {
+// ライブラリにある同じ文献から、自分の PDF のリンクを探す
+function ownPdf (r) {
+  if (r._pdf) return r._pdf
+  const k = refKey(r)
+  return app.library.find(x => refKey(x) === k)?._pdf || ''
+}
+
+// 「PubMed・出版社・全文（PMC）・PDF を探す・自分の PDF」の並び。pdfEdit ならリンクの登録もできる
+function linkRow (r, { pdfEdit = false } = {}) {
   const row = document.createElement('div')
   row.className = 'links'
   // クリックしても、文献の選択が切り替わらないようにする
   row.addEventListener('click', e => e.stopPropagation())
+  const mine = ownPdf(r)
+  if (mine) {
+    const a = document.createElement('a')
+    a.href = mine
+    a.className = 'mine'
+    a.textContent = '自分の PDF'
+    a.addEventListener('click', e => { e.preventDefault(); openUrl(mine) })
+    row.append(a)
+  }
   for (const l of linksFor(r)) {
     const a = document.createElement('a')
     a.href = l.url
@@ -114,11 +130,74 @@ function linkRow (r) {
     })
     row.append(btn)
   }
+  if (pdfEdit) {
+    const btn = document.createElement('button')
+    btn.className = 'linkbtn'
+    btn.textContent = mine ? 'PDF を変更' : 'PDF を登録'
+    btn.addEventListener('click', e => {
+      e.preventDefault()
+      row.after(pdfEditor(r))
+      btn.disabled = true
+    })
+    row.append(btn)
+  }
   return row
 }
 
+// 自分の PDF のリンクを登録・変更・削除する欄
+function pdfEditor (r) {
+  const box = document.createElement('div')
+  box.className = 'pdfedit'
+  box.addEventListener('click', e => e.stopPropagation())
+  const help = document.createElement('p')
+  help.textContent = 'OneDrive などで PDF の「リンクをコピー」をして貼り付けてください。共有範囲は「自分だけ」にしてください。'
+  const input = document.createElement('input')
+  input.type = 'url'
+  input.placeholder = 'https://…'
+  input.value = r._pdf || ''
+  const msg = document.createElement('p')
+  msg.className = 'err'
+  const row = document.createElement('div')
+  row.className = 'row end'
+  const mk = (text, cls, fn) => {
+    const b = document.createElement('button')
+    b.textContent = text
+    if (cls) b.className = cls
+    b.addEventListener('click', fn)
+    return b
+  }
+  const save = url => {
+    const item = app.library.find(x => x.id === r.id)
+    if (url) item._pdf = url
+    else delete item._pdf
+    persistLibrary()
+    renderLibrary()
+  }
+  row.append(
+    ...(r._pdf ? [mk('削除', 'ghost', () => { save(''); toast('PDF のリンクを削除しました') })] : []),
+    mk('やめる', 'ghost', () => renderLibrary()),
+    mk('保存', 'primary', () => {
+      const url = input.value.trim()
+      if (/^[a-z]:\\|^\\\\|^file:/i.test(url)) {
+        msg.textContent = 'パソコン内のファイルは開けません。OneDrive などに保存して、その共有リンクを貼り付けてください。'
+        return
+      }
+      if (!/^https:\/\/\S+$/i.test(url)) {
+        msg.textContent = '「https://」で始まるリンクを貼り付けてください。'
+        return
+      }
+      save(url)
+      toast('PDF のリンクを登録しました')
+    })
+  )
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') row.lastChild.click() })
+  box.append(help, input, msg, row)
+  setTimeout(() => input.focus(), 0)
+  return box
+}
+
 // 文献 1 件分の <li> を作る（テキストはすべて textContent で入れる）
-function refItem (r, { checkbox = false, checked = false, badge = '', button = null } = {}) {
+function refItem (r, { checkbox = false, checked = false, badge = '', button = null, pdfEdit = false } = {}) {
   const li = document.createElement('li')
   li.className = 'ref' + (checked ? ' checked' : '')
   if (checkbox) {
@@ -147,7 +226,7 @@ function refItem (r, { checkbox = false, checked = false, badge = '', button = n
   const jr = document.createElement('div')
   jr.className = 'jr'
   jr.textContent = [journal(r), r.PMID ? `PMID ${r.PMID}` : ''].filter(Boolean).join(' · ')
-  li.append(meta, title, jr, linkRow(r))
+  li.append(meta, title, jr, linkRow(r, { pdfEdit }))
   if (button) li.append(button)
   return li
 }
@@ -180,7 +259,7 @@ function renderLibrary () {
     })
   if (onlyCited) items.sort((a, b) => a.n - b.n)
   for (const { r, n } of items) {
-    const li = refItem(r, { checkbox: true, checked: app.selected.has(r.id), badge: n ? `[${n}]` : '' })
+    const li = refItem(r, { checkbox: true, checked: app.selected.has(r.id), badge: n ? `[${n}]` : '', pdfEdit: true })
     li.addEventListener('click', () => {
       if (app.selected.has(r.id)) app.selected.delete(r.id)
       else app.selected.add(r.id)
@@ -207,7 +286,8 @@ $('btnCite').addEventListener('click', async () => {
   const refs = app.library
     .filter(r => app.selected.has(r.id))
     .map(r => {
-      const { _added, ...csl } = r
+      // 自分の PDF のリンクは文書に入れない（文書を人に渡しても見えないように）
+      const { _added, _pdf, ...csl } = r
       return docByKey.get(refKey(r)) || csl
     })
   $('btnCite').disabled = true
@@ -749,7 +829,7 @@ $('btnExportJson').addEventListener('click', () => {
 })
 
 $('btnExportRis').addEventListener('click', () => {
-  const ris = new Cite(app.library.map(({ _added, ...r }) => r)).format('ris')
+  const ris = new Cite(app.library.map(({ _added, _pdf, ...r }) => r)).format('ris')
   exportText(ris, `refcite-library-${stamp()}.ris`, 'application/x-research-info-systems')
 })
 

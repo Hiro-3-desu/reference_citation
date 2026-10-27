@@ -171,7 +171,12 @@ export function addToLibrary (library, items) {
   let added = 0
   for (const it of items) {
     const k = refKey(it)
-    if (keys.has(k)) continue
+    if (keys.has(k)) {
+      // すでにある文献でも、自分の PDF のリンクがまだなければ引き継ぐ（バックアップから戻すとき）
+      const have = library.find(r => refKey(r) === k)
+      if (it._pdf && !have._pdf) have._pdf = it._pdf
+      continue
+    }
     keys.add(k)
     library.unshift({ ...it, _added: new Date().toISOString() })
     added++

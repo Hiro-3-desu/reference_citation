@@ -74,7 +74,7 @@ button.danger-outline { color: var(--danger); border-color: var(--danger); }
 .ref { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
 .ref:hover { background: var(--panel); }
 .ref.checked { background: var(--accent-soft); }
-.ref input { margin: 2px 0 0; grid-row: span 4; }
+.ref > input { margin: 2px 0 0; grid-row: span 5; }
 .ref .meta { display: flex; gap: 6px; align-items: baseline; font-size: 12px; color: var(--muted); min-width: 0; }
 .ref .meta b { color: var(--fg); font-weight: 600; }
 .ref .title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; }
@@ -132,3 +132,9 @@ a { color: var(--accent); }
 .links .linkbtn { border: 0; background: none; padding: 0; font-size: 12px; color: var(--accent); }
 .links .linkbtn:hover:not(:disabled) { background: none; text-decoration: underline; }
 .links .linkbtn:disabled { color: var(--muted); opacity: 1; }
+
+.links .mine { font-weight: 600; }
+.pdfedit { grid-column: 2; display: flex; flex-direction: column; gap: 6px; padding: 8px; margin-top: 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); font-size: 12px; cursor: default; }
+.pdfedit input { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; }
+.pdfedit .err { color: var(--danger); }
+.pdfedit .err:empty { display: none; }

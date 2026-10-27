@@ -40,15 +40,15 @@ for (let i = 0; i < 3; i++) console.log('links', i, await rows.nth(i).locator('.
 await rows.nth(1).locator('.links a', { hasText: '出版社' }).click()
 console.log('selected after link click:', await page.textContent('#selCount'))
 // PDF を探す：見つかる → 開く
-await rows.nth(1).locator('.linkbtn').click()
+await rows.nth(1).locator('.linkbtn').first().click()
 await page.waitForTimeout(200)
-console.log('found  :', await rows.nth(1).locator('.linkbtn').textContent())
+console.log('found  :', await rows.nth(1).locator('.linkbtn').first().textContent())
 // 見つからない
-await rows.nth(2).locator('.linkbtn').click()
+await rows.nth(2).locator('.linkbtn').first().click()
 await page.waitForTimeout(200)
-console.log('none   :', await rows.nth(2).locator('.linkbtn').textContent(), '|', await page.textContent('#toast'))
+console.log('none   :', await rows.nth(2).locator('.linkbtn').first().textContent(), '|', await page.textContent('#toast'))
 // もう一度押しても問い合わせない（覚えている）
-await rows.nth(1).locator('.linkbtn').click()
+await rows.nth(1).locator('.linkbtn').first().click()
 console.log('opened :', await page.evaluate(() => window.__opened))
 console.log('openalex requests:', openalex)
 await page.screenshot({ path: (process.env.SHOTS || '.') + '/links.png' })
