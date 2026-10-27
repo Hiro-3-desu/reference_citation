@@ -157,12 +157,12 @@
   <p class="small">書き出したファイルは「追加」タブの「ファイルから読み込む」で戻せます。</p>
   <textarea id="exportBox" rows="6" readonly hidden></textarea>
 
-  <h2>投稿用に変換</h2>
-  <p class="small">引用番号と文献リストを、ふつうの文字に変換します。投稿直前に、<strong>別名で保存した文書</strong>で行ってください。変換した後は、番号の自動更新ができなくなります。</p>
-  <button id="btnPlain" class="danger-outline">ふつうの文字に変換する</button>
+  <h2>リンクを外す（投稿前）</h2>
+  <p class="small">引用番号と文献リストの RefCite とのリンクを外し、ただの文字にします。見た目は変わりません。投稿直前に、<strong>別名で保存した文書</strong>で行ってください。外した後は、その文書で番号の自動更新や形式の切り替えができなくなります。</p>
+  <button id="btnPlain" class="danger-outline">リンクを外す（投稿前）</button>
   <div id="plainConfirm" class="confirm" hidden>
-    <p>この文書の引用と文献リストを、すべてふつうの文字に変換します。元に戻すには Word の「元に戻す」を使ってください。</p>
-    <div class="row end"><button id="btnPlainNo" class="ghost">やめる</button><button id="btnPlainYes" class="danger">変換する</button></div>
+    <p>この文書の引用と文献リストのリンクを、すべて外します。元に戻すには、すぐに Word の「元に戻す」（Ctrl+Z）を使ってください。</p>
+    <div class="row end"><button id="btnPlainNo" class="ghost">やめる</button><button id="btnPlainYes" class="danger">リンクを外す</button></div>
   </div>
   <p id="plainStatus" class="muted small"></p>
 

@@ -163,7 +163,7 @@ function writeBibliography (cc, entries) {
   })
 }
 
-// 投稿用に、引用と文献リストをふつうの文字に変換する（元に戻せない）
+// 投稿前に、引用と文献リストの RefCite とのリンクを外してただの文字にする（元に戻せない）
 export async function convertToPlainText () {
   return Word.run(async ctx => {
     const ccs = ctx.document.body.contentControls

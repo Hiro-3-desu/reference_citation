@@ -87,7 +87,7 @@ console.log('cited only:', await items.count(), await page.locator('#libList .ba
 await page.click('[data-tab=manage]')
 await page.click('#btnPlain'); await page.click('#btnPlainYes')
 await page.waitForTimeout(200)
-console.log('plain:', await page.textContent('#plainStatus'))
+console.log('unlink:', await page.textContent('#plainStatus'))
 console.log('--- doc (plain) ---\n' + await docText())
 
 console.log('errors:', errors)

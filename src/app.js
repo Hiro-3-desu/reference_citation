@@ -695,9 +695,9 @@ $('btnPlainYes').addEventListener('click', async () => {
   try {
     await word.refresh(app.doc)
     const n = await word.convertToPlainText()
-    $('plainStatus').textContent = `${n} か所をふつうの文字に変換しました。`
+    $('plainStatus').textContent = `${n} か所のリンクを外しました。`
   } catch (e) {
-    $('plainStatus').textContent = '変換できませんでした: ' + errorMessage(e)
+    $('plainStatus').textContent = 'リンクを外せませんでした: ' + errorMessage(e)
   }
 })
 
