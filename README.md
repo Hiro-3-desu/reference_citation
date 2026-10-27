@@ -47,10 +47,21 @@ node test/ui.e2e.mjs                                                 # Word の�
 
 ## Word への登録（Windows の Microsoft 365）
 
-1. `manifest.xml` を置くフォルダを作り（例: `C:\RefCite`）、そのフォルダを右クリック →「プロパティ」→「共有」→「共有」で自分と共有します。表示されるネットワークパス（例: `\\PC名\RefCite`）を控えます。
-2. Word を開き、「ファイル」→「オプション」→「トラスト センター」→「トラスト センターの設定」→「信頼できるアドイン カタログ」を開きます。
-3. 「カタログの URL」に 1 のネットワークパスを入れて「カタログの追加」を押し、「メニューに表示する」にチェックを入れて OK。Word を再起動します。
-4. 「ホーム」→「アドイン」→「その他のアドイン」→「共有フォルダー」から RefCite を選んで「追加」。
-5. 「ホーム」タブに「RefCite」ボタンが出ます。
+1. `manifest.xml` を https://hiro-3-desu.github.io/reference_citation/manifest.xml からダウンロードし、`C:\RefCite\manifest.xml` に置きます（同期していないフォルダに置く）。
+2. Word をすべて閉じ、ターミナル（PowerShell）で次を実行します。
 
-Word on the web では「挿入」→「アドイン」→「マイ アドインのアップロード」から `manifest.xml` を選ぶだけで使えます。
+   ```
+   reg add "HKCU\Software\Microsoft\Office\16.0\WEF\Developer" /v RefCite /t REG_SZ /d "C:\RefCite\manifest.xml" /f
+   ```
+
+3. Word を開くと「ホーム」タブの右端に「RefCite」ボタンが出ます。
+
+登録をやめるときは `reg delete "HKCU\Software\Microsoft\Office\16.0\WEF\Developer" /v RefCite /f` を実行します。
+
+「信頼できるアドイン カタログ」に共有フォルダーを登録する方法もありますが、環境によっては「共有フォルダー」タブが表示されません。
+
+Word on the web では「挿入」→「アドイン」→「その他のアドイン」→「マイ アドイン」→「マイ アドインのアップロード」から `manifest.xml` を選ぶだけで使えます。
+
+## パソコンを買い替えるとき
+
+ライブラリはパソコンごとに保存されます。「管理」タブの「ライブラリを書き出す（JSON）」で書き出したファイルを OneDrive などに保存しておき、新しいパソコンで「追加」タブの「ファイルから読み込む」で戻します。
