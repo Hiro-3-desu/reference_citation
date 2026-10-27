@@ -47,6 +47,22 @@
 
 <!-- 追加 -->
 <section id="tab-add" class="tab" hidden>
+  <h2>AI の回答から追加</h2>
+  <p class="small">Claude や Codex の回答を、そのまま貼り付けてください。PMID・DOI・PubMed のリンクを拾い、ないものはタイトルで PubMed を検索します。PMID や DOI だけを並べて貼っても使えます。</p>
+  <textarea id="aiInput" rows="6" placeholder="ここに AI の回答を貼り付け"></textarea>
+  <div class="row end"><button id="aiClear" class="ghost">消す</button><button id="aiRun" class="primary">文献を確認</button></div>
+  <p id="aiStatus" class="status small" role="status"></p>
+  <div id="aiReview" hidden>
+    <ul id="aiList" class="review"></ul>
+    <div class="row end"><button id="aiAdd" class="primary">選択した文献を追加</button></div>
+  </div>
+  <details class="small">
+    <summary>AI への頼み方（コピーして使う）</summary>
+    <p>文献を探してもらうときに、次の文を添えると、取り込みが確実になります。</p>
+    <textarea id="aiPrompt" rows="5" readonly>見つけた論文は番号付きリストにして、1 本ごとに 筆頭著者 et al.、論文タイトル（英語のまま）、雑誌名、発行年、PMID、DOI を書いてください。PMID や DOI が確認できない場合は推測せず「不明」と書いてください。</textarea>
+    <div class="row end"><button id="aiPromptCopy">コピー</button></div>
+  </details>
+
   <h2>PubMed で検索</h2>
   <form id="pmForm" class="row">
     <input id="pmTerm" type="search" placeholder="例: STEMI interhospital transfer" autocomplete="off">
@@ -57,11 +73,6 @@
   <div id="pmActions" class="row end" hidden>
     <button id="pmAdd" class="primary">選択した文献を追加</button>
   </div>
-
-  <h2>PMID・DOI で追加</h2>
-  <textarea id="idInput" rows="3" placeholder="例: 33087347&#10;10.1136/bmj.m3339&#10;（複数あるときは改行かスペースで区切る）"></textarea>
-  <div class="row end"><button id="idAdd" class="primary">追加</button></div>
-  <p id="idStatus" class="muted small"></p>
 
   <h2>ファイルから読み込む</h2>
   <p class="small">RIS（.ris / .txt）、BibTeX（.bib）、CSL-JSON に対応しています。</p>

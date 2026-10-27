@@ -269,3 +269,161 @@ export function htmlToRuns (html) {
 export function runsToText (runs) {
   return runs.map(r => r.text).join('')
 }
+
+// ---------- AI の回答からの読み取り ----------
+
+const STOPWORDS = new Set(('a an and are as at be by for from has have in into is it its of on or that the their this to was were with ' +
+  'versus vs among after before during between within without using use study trial patients').split(' '))
+
+function words (s) {
+  return (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOPWORDS.has(w))
+}
+
+// 論文タイトルの語のうち、AI の回答の文章に含まれている割合（0〜1）
+export function titleSimilarity (title, text) {
+  const t = [...new Set(words(title))]
+  if (!t.length) return 0
+  const have = new Set(words(text))
+  return t.filter(w => have.has(w)).length / t.length
+}
+
+// Markdown の装飾とリンクを外した、読める文字列にする
+function plain (s) {
+  return s
+    .replace(/!?\[([^\]]*)\]\(([^)]*)\)/g, (m, label, url) => `${label} ${url}`)
+    .replace(/<\/?[a-z][^>]*>/gi, ' ')
+    .replace(/[*_`]+/g, '')
+    .replace(/^\s*(\d{1,3}[.)]|\[\d{1,3}\]|[-*•+])\s+/, '')
+    .replace(/\s*\|\s*/g, ' | ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+const DOI_RE = /\b(10\.\d{4,9}\/[^\s"'<>|\]\[]+)/g
+const PMID_RES = [
+  /\bPMIDs?\s*[:#：]?\s*(\d{1,9})\b/gi,
+  /\bPMIDs?\s*[:#：]?\s*(?:\d{1,9}\s*[,、;]\s*)+(\d{1,9})\b/gi, // "PMIDs: 1, 2, 3" の 2 つ目以降
+  /pubmed\.ncbi\.nlm\.nih\.gov\/(\d{1,9})/gi,
+  /ncbi\.nlm\.nih\.gov\/pubmed\/(\d{1,9})/gi
+]
+const PMC_RE = /\b(PMC\d{3,9})\b/g
+
+function cleanDoi (d) {
+  try { d = decodeURIComponent(d) } catch { /* そのまま使う */ }
+  d = d.replace(/[.,;:。、）]+$/, '')
+  // 末尾の ")" は、DOI の中に "(" がなければ文章側のかっこ
+  while (d.endsWith(')') && (d.match(/\(/g) || []).length < (d.match(/\)/g) || []).length) d = d.slice(0, -1)
+  return d.replace(/[.,;:]+$/, '')
+}
+
+function extractIds (raw) {
+  const pmids = new Set()
+  const dois = new Set()
+  const pmcids = new Set()
+  for (const re of PMID_RES) for (const m of raw.matchAll(re)) pmids.add(m[1])
+  for (const m of raw.matchAll(/\bPMIDs?\s*[:#：]?\s*((?:\d{1,9}\s*[,、;]\s*)+\d{1,9})/gi)) {
+    for (const id of m[1].split(/[,、;\s]+/)) if (id) pmids.add(id)
+  }
+  for (const m of raw.matchAll(DOI_RE)) dois.add(cleanDoi(m[1]).toLowerCase())
+  for (const m of raw.matchAll(PMC_RE)) pmcids.add(m[1].toUpperCase())
+  // 行全体が数字だけなら PMID とみなす（PMID を並べて貼った場合）
+  const bare = raw.trim()
+  if (/^\d{4,9}$/.test(bare)) pmids.add(bare)
+  return { pmids: [...pmids], dois: [...dois], pmcids: [...pmcids] }
+}
+
+// AI の回答から、検索に使うタイトルらしい部分を取り出す
+export function guessTitle (raw) {
+  const segs = []
+  for (const m of raw.matchAll(/\*\*([^*]+)\*\*|__([^_]+)__|[“"「]([^”"」]+)[”"」]|(?<![*\w])\*([^*]+)\*(?!\*)/g)) {
+    segs.push((m[1] || m[2] || m[3] || m[4]).trim())
+  }
+  const text = plain(raw).replace(/https?:\/\/\S+/g, ' ')
+  const good = s => s.split(/\s+/).length >= 4 && /[a-z]{3,}/.test(s) && !/^(doi|pmid|https?)/i.test(s)
+  const quoted = segs.filter(good).sort((a, b) => b.length - a.length)[0]
+  if (quoted) return quoted.replace(/[.。]$/, '')
+  // ". " で区切った中で、小文字の単語を多く含む一番長い部分（著者名の並びは除く）
+  const parts = text.split(/\.\s+|\s+\|\s+|—|–\s/).map(s => s.trim())
+  const scored = parts
+    .filter(good)
+    .filter(s => !/^(doi|pmid|journal|authors?)\b/i.test(s))
+    .map(s => ({ s, n: (s.match(/\b[a-z]{3,}\b/g) || []).length }))
+    .sort((a, b) => b.n - a.n || b.s.length - a.s.length)
+  return scored[0]?.s.replace(/[.。]$/, '') || ''
+}
+
+// AI の回答を、文献 1 件ずつのまとまりに分ける
+export function parseAiText (text) {
+  const lines = text.replace(/\r\n?/g, '\n').split('\n')
+  const items = []
+  let cur = null
+  let table = null // 表の見出しから分かった PMID・DOI の列
+  const startRe = /^(\s*)(\d{1,3}[.)]|\[\d{1,3}\]|[-*•+])\s+/
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) { cur = null; continue }
+    if (!line.trim() || /^\s*#/.test(line)) { cur = null; table = null; continue }
+    if (/^\s*\|?\s*:?-{3,}/.test(line)) continue // 表の区切り行
+    if (/^\s*\|/.test(line)) { // 表は 1 行 1 件
+      cur = null
+      const cells = line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+      if (!table) {
+        table = { pmid: cells.findIndex(c => /^pmid/i.test(c)), doi: cells.findIndex(c => /^doi/i.test(c)) }
+        if (table.pmid >= 0 || table.doi >= 0) continue // 見出し行
+      }
+      let raw = line
+      if (table.pmid >= 0 && /^\d{1,9}$/.test(cells[table.pmid] || '')) raw += ` PMID ${cells[table.pmid]}`
+      if (table.doi >= 0 && cells[table.doi]) raw += ` ${cells[table.doi]}`
+      items.push({ raw })
+      continue
+    }
+    table = null
+    const m = startRe.exec(line)
+    const indent = (/^\s*/.exec(line)[0]).length
+    // 箇条書きの中で、より深く字下げされた行はその項目の続き
+    if (cur && cur.marker && indent > cur.indent) {
+      cur.raw += '\n' + line
+    } else {
+      cur = { raw: line, indent, marker: !!m }
+      items.push(cur)
+    }
+  }
+
+  const out = []
+  for (const { raw } of items) {
+    const ids = extractIds(raw)
+    const label = plain(raw.split('\n').map(l => l.trim()).join(' '))
+    const year = /\b(19[5-9]\d|20[0-4]\d)\b/.exec(label)?.[1]
+    const nIds = ids.pmids.length + ids.dois.length + ids.pmcids.length
+    const textWords = label.replace(/https?:\/\/\S+|\b10\.\d{4,9}\/\S+|\bPMID\S*\s*\d+|\bPMC\d+/gi, ' ').split(/\s+/).filter(w => /[a-z]{2,}/i.test(w))
+    // ID がない場合は、文献らしい書き方（et al.、巻;ページ、太字や引用符のタイトル）があるものだけ残す
+    const citationLike = /\bet al\b|\d{4};\s*\d|\d+\(\d+\)|:\s*\d+[-–]\d+|\b(N Engl J Med|NEJM|Lancet|JAMA|BMJ|Circulation|JACC|Eur Heart J)\b/i.test(label) || /\*\*[^*]{20,}\*\*|[“"][^”"]{20,}[”"]/.test(raw)
+    if (!nIds && !(year && textWords.length >= 6 && citationLike)) continue
+    // 1 つのまとまりに PMID が複数（ID の羅列）なら 1 件ずつに分ける
+    if (ids.pmids.length > 1 && !ids.dois.length) {
+      for (const p of ids.pmids) out.push({ label: `PMID ${p}`, pmids: [p], dois: [], pmcids: [], title: '', year: '', checkable: false })
+      continue
+    }
+    if (!ids.pmids.length && ids.dois.length > 1) {
+      for (const d of ids.dois) out.push({ label: d, pmids: [], dois: [d], pmcids: [], title: '', year: '', checkable: false })
+      continue
+    }
+    out.push({
+      label: label.length > 300 ? label.slice(0, 300) + '…' : label,
+      ...ids,
+      title: guessTitle(raw),
+      year: year || '',
+      // ID 以外の文章が十分あれば、見つかった論文と食い違っていないか確かめる
+      checkable: textWords.length >= 5
+    })
+  }
+  // 同じ ID がすでに前の項目に出ていれば、その項目は省く（回答の最後の ID 一覧など）
+  const seen = new Set()
+  const unique = out.filter(it => {
+    const ids = [...it.pmids.map(p => 'p' + p), ...it.dois.map(d => 'd' + d), ...it.pmcids.map(p => 'c' + p)]
+    const dup = ids.length > 0 && ids.every(id => seen.has(id))
+    ids.forEach(id => seen.add(id))
+    return !dup
+  })
+  return unique.slice(0, 100)
+}

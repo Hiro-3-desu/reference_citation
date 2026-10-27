@@ -49,3 +49,36 @@ test('citeproc の HTML を書式付きの文字列片にする', () => {
   assert.equal(c.runsToText(runs), '1. A B & C.')
   assert.deepEqual(runs.filter(r => r.italic).map(r => r.text), ['B'])
 })
+
+const fixture = name => readFileSync(new URL(`./fixtures/${name}.md`, import.meta.url), 'utf8')
+
+test('Claude の回答から、ID・リンク・ID なしの文献を拾う', () => {
+  const items = c.parseAiText(fixture('claude'))
+  assert.equal(items.length, 3) // 最後の英語の文章は文献として拾わない
+  assert.deepEqual(items[0].pmids, ['12517460'])
+  assert.deepEqual(items[0].dois, ['10.1016/s0140-6736(03)12113-7'])
+  assert.deepEqual(items[1].pmids, ['29138293']) // 字下げした箇条書きのリンクも同じ文献
+  assert.deepEqual(items[2].pmids, [])
+  assert.equal(items[2].title, 'A comparison of coronary angioplasty with fibrinolytic therapy in acute myocardial infarction')
+})
+
+test('Codex の回答から、DOI リンク・表の PMID 列・ID 一覧を拾い、重複は省く', () => {
+  const items = c.parseAiText(fixture('codex'))
+  assert.deepEqual(items.map(it => [...it.pmids, ...it.dois]), [
+    ['10.1016/s0140-6736(03)12113-7'],
+    ['10.1056/nejmoa025142'],
+    ['12930925'],
+    ['12684343'],
+    ['12517460']
+  ])
+})
+
+test('ID だけを並べて貼った場合は 1 行 1 件', () => {
+  assert.equal(c.parseAiText('33087347\n10.1136/bmj.m3339\nPMID: 12517460').length, 3)
+  assert.equal(c.parseAiText('PMIDs: 1111111, 2222222, 3333333').length, 3)
+})
+
+test('タイトルの一致度', () => {
+  assert.ok(c.titleSimilarity('A comparison of coronary angioplasty with fibrinolytic therapy', 'Andersen HR. A comparison of coronary angioplasty with fibrinolytic therapy. NEJM') > 0.9)
+  assert.ok(c.titleSimilarity('Dapagliflozin in heart failure with reduced ejection fraction', 'Keeley EC. Primary angioplasty versus thrombolysis. Lancet') < 0.2)
+})

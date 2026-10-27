@@ -1,7 +1,7 @@
 /* global Office */
 import { Cite } from '@citation-js/core'
-import { STYLE_LIST, MARKERS, refKey, shortAuthor, year, journal, parseImportText } from './core.js'
-import { pubmedSearch, lookupIds, loadLibrary, saveLibrary, addToLibrary } from './sources.js'
+import { STYLE_LIST, MARKERS, refKey, shortAuthor, year, journal, parseImportText, parseAiText } from './core.js'
+import { pubmedSearch, resolveAiItems, loadLibrary, saveLibrary, addToLibrary } from './sources.js'
 import * as word from './word.js'
 
 const $ = id => document.getElementById(id)
@@ -13,6 +13,8 @@ const app = {
   numbers: new Map(), // refKey → この文書での番号
   pmResults: [],
   pmSelected: new Set(),
+  aiResults: [], // resolveAiItems の結果
+  aiPick: new Map(), // aiResults の番号 → 追加する文献（追加しないなら null）
   editing: null // 編集中の引用 { key, refIds }
 }
 
@@ -221,22 +223,172 @@ $('pmAdd').addEventListener('click', () => {
   toast(`${added} 件をライブラリに追加しました`)
 })
 
-$('idAdd').addEventListener('click', async () => {
-  const text = $('idInput').value.trim()
-  if (!text) return
-  $('idStatus').textContent = '取得しています…'
+// ---------- AI の回答から追加 ----------
+
+const AI_STATUS = {
+  ok: ['ok', '確認できました'],
+  mismatch: ['warn', '要確認'],
+  candidates: ['info', 'タイトルで検索'],
+  notfound: ['bad', '見つかりません']
+}
+
+function aiOption (r, { type, name, checked, onPick }) {
+  const label = document.createElement('label')
+  label.className = 'opt'
+  const input = document.createElement('input')
+  input.type = type
+  input.name = name
+  input.checked = checked
+  input.addEventListener('change', () => onPick(input.checked))
+  const meta = document.createElement('div')
+  meta.className = 'meta'
+  const b = document.createElement('b')
+  b.textContent = shortAuthor(r)
+  const y = document.createElement('span')
+  y.textContent = year(r)
+  meta.append(b, y)
+  const title = document.createElement('div')
+  title.textContent = r.title || '（タイトルなし）'
+  const jr = document.createElement('div')
+  jr.className = 'jr'
+  jr.textContent = [journal(r), r.PMID ? `PMID ${r.PMID}` : (r.DOI ? `DOI ${r.DOI}` : '')].filter(Boolean).join(' · ')
+  label.append(input, meta, title, jr)
+  return label
+}
+
+function renderAi () {
+  const list = $('aiList')
+  list.replaceChildren()
+  const inLib = new Set(app.library.map(refKey))
+  app.aiResults.forEach((it, i) => {
+    const li = document.createElement('li')
+    li.className = 'rv'
+    const owned = it.ref && inLib.has(refKey(it.ref))
+    const [cls, text] = owned ? ['ok', '追加済み'] : AI_STATUS[it.status]
+    const chip = document.createElement('span')
+    chip.className = 'chip ' + cls
+    chip.textContent = text
+    const src = document.createElement('div')
+    src.className = 'src'
+    src.textContent = 'AI の回答: ' + it.label
+    li.append(chip, src)
+
+    const note = msg => {
+      const p = document.createElement('div')
+      p.className = 'note'
+      p.textContent = msg
+      li.append(p)
+    }
+    const pick = ref => checked => {
+      app.aiPick.set(i, checked ? ref : null)
+      renderAiButton()
+    }
+    const radio = (r, label) => {
+      const opt = aiOption(r, { type: 'radio', name: 'ai' + i, checked: app.aiPick.get(i) === r, onPick: pick(r) })
+      if (inLib.has(refKey(r))) {
+        opt.querySelector('input').disabled = true
+        opt.querySelector('.meta').append(Object.assign(document.createElement('span'), { className: 'badge', textContent: '追加済み' }))
+      } else if (label) {
+        opt.querySelector('.meta').append(Object.assign(document.createElement('span'), { className: 'badge', textContent: label }))
+      }
+      return opt
+    }
+    const noneOption = () => {
+      const none = document.createElement('label')
+      none.className = 'opt'
+      const r = Object.assign(document.createElement('input'), { type: 'radio', name: 'ai' + i, checked: !app.aiPick.get(i) })
+      r.addEventListener('change', () => { app.aiPick.set(i, null); renderAiButton() })
+      none.append(r, Object.assign(document.createElement('div'), { textContent: 'どれでもない（追加しない）' }))
+      return none
+    }
+    if (it.status === 'ok') {
+      if (!owned) li.append(aiOption(it.ref, { type: 'checkbox', name: 'ai' + i, checked: !!app.aiPick.get(i), onPick: pick(it.ref) }))
+    } else if (it.status === 'mismatch') {
+      note(it.doiConflict
+        ? 'PMID と DOI が別の論文を指しています。正しいものを選んでください。'
+        : 'AI が書いた内容と、この ID の論文が一致しません。ID が間違っている可能性があります。正しいものを選んでください。')
+      li.append(radio(it.ref, 'ID の論文'))
+      for (const c of it.candidates || []) li.append(radio(c.ref, 'タイトルで検索'))
+      li.append(noneOption())
+    } else if (it.status === 'candidates') {
+      note('ID が書かれていないので、タイトルで探した候補です。正しいものを選んでください。')
+      for (const c of it.candidates) li.append(radio(c.ref))
+      li.append(noneOption())
+    } else {
+      note('PubMed にも Crossref にも見つかりませんでした。AI が実在しない論文を挙げた可能性があります。')
+    }
+    list.append(li)
+  })
+  $('aiReview').hidden = app.aiResults.length === 0
+  renderAiButton()
+}
+
+function renderAiButton () {
+  const n = [...app.aiPick.values()].filter(Boolean).length
+  $('aiAdd').disabled = n === 0
+  $('aiAdd').textContent = n ? `選択した ${n} 件を追加` : '選択した文献を追加'
+}
+
+$('aiRun').addEventListener('click', async () => {
+  const text = $('aiInput').value
+  const items = parseAiText(text)
+  app.aiResults = []
+  app.aiPick.clear()
+  renderAi()
+  if (!items.length) {
+    $('aiStatus').textContent = '文献が見つかりませんでした。PMID・DOI・論文タイトルを含む部分を貼り付けてください。'
+    return
+  }
+  $('aiRun').disabled = true
   try {
-    const { found, failed } = await lookupIds(text)
-    const added = addItems(found)
-    const dup = found.length - added
-    $('idStatus').textContent = [
-      `${added} 件を追加しました。`,
-      dup ? `${dup} 件はすでにライブラリにありました。` : '',
-      failed.length ? `見つからなかったもの: ${failed.join(', ')}` : ''
-    ].filter(Boolean).join(' ')
-    if (!failed.length) $('idInput').value = ''
+    app.aiResults = await resolveAiItems(items, msg => { $('aiStatus').textContent = msg })
+    const inLib = new Set(app.library.map(refKey))
+    app.aiResults.forEach((it, i) => {
+      // 確認できたものと、タイトルがよく一致する候補は、最初から選んでおく
+      if (it.status === 'ok' && !inLib.has(refKey(it.ref))) app.aiPick.set(i, it.ref)
+      // タイトルがよく一致する候補は選んでおく（ID が食い違っていたものも、正しい論文が見つかれば）
+      const top = it.candidates?.[0]
+      if ((it.status === 'candidates' || it.status === 'mismatch') && top && top.score >= 0.8 && !inLib.has(refKey(top.ref))) app.aiPick.set(i, top.ref)
+    })
+    const count = s => app.aiResults.filter(it => it.status === s).length
+    $('aiStatus').textContent = [
+      `${app.aiResults.length} 件を確認しました。`,
+      count('ok') ? `確認できた ${count('ok')} 件` : '',
+      count('mismatch') ? `要確認 ${count('mismatch')} 件` : '',
+      count('candidates') ? `タイトルで検索 ${count('candidates')} 件` : '',
+      count('notfound') ? `見つからない ${count('notfound')} 件` : ''
+    ].filter(Boolean).join(' / ')
   } catch (err) {
-    $('idStatus').textContent = '取得できませんでした: ' + errorMessage(err)
+    $('aiStatus').textContent = '確認できませんでした: ' + errorMessage(err)
+  }
+  $('aiRun').disabled = false
+  renderAi()
+})
+
+$('aiAdd').addEventListener('click', () => {
+  const refs = [...app.aiPick.values()].filter(Boolean)
+  const added = addItems(refs)
+  app.aiPick.clear()
+  renderAi()
+  toast(`${added} 件をライブラリに追加しました`)
+})
+
+$('aiClear').addEventListener('click', () => {
+  $('aiInput').value = ''
+  $('aiStatus').textContent = ''
+  app.aiResults = []
+  app.aiPick.clear()
+  renderAi()
+})
+
+$('aiPromptCopy').addEventListener('click', async () => {
+  const box = $('aiPrompt')
+  try {
+    await navigator.clipboard.writeText(box.value)
+    toast('コピーしました')
+  } catch {
+    box.select()
+    toast('選択しました。Ctrl+C でコピーしてください。')
   }
 })
 

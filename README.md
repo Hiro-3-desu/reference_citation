@@ -4,7 +4,8 @@ Word で使う文献管理アドインです。EndNote の「Cite While You Writ
 
 ## できること
 
-- **文献の追加**: PubMed 検索、PMID / DOI の入力、RIS・BibTeX・CSL-JSON ファイルの読み込み（EndNote は RIS で書き出し）
+- **AI の回答から追加**: Claude や Codex の回答をそのまま貼り付けると、PMID・DOI・PubMed / DOI のリンク・表の PMID 列を拾って PubMed / Crossref で確認する。ID のない文献はタイトルで検索して候補を出す。AI が書いた内容と ID の論文が食い違うもの（ID の間違い）や、見つからないもの（実在しない可能性）は印を付けて知らせる
+- **文献の追加**: PubMed 検索、RIS・BibTeX・CSL-JSON ファイルの読み込み（EndNote は RIS で書き出し）
 - **引用の挿入**: 文献を選んで「引用を挿入」。番号は文書中の初出順に自動で振られ、範囲はまとめて表示（例: 1–3,5）
 - **文献リスト**: BMJ、Vancouver（NLM / Elsevier）、AMA、NEJM、Lancet、AHA、JACC、ESC、Circulation Journal、Nature
 - **引用の編集**: 引用から文献を外す。カーソルを引用の中に置いて「引用を挿入」すると文献を追加
@@ -37,6 +38,7 @@ npm install
 BASE_URL=https://<ユーザー名>.github.io/<リポジトリ名> npm run build   # dist/ に出力
 npm test                                                             # 番号付け・取り込み・整形のテスト
 node test/ui.e2e.mjs                                                 # Word の模擬環境で画面を通しで操作（Playwright が必要）
+node test/ai.e2e.mjs                                                 # 「AI の回答から追加」を PubMed の模擬応答で通しで操作
 ```
 
 `dist/` を HTTPS で公開し、`dist/manifest.xml` を Word に登録すると使えます。
